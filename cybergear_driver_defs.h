@@ -1,5 +1,3 @@
-#ifndef CYBER_GEAR_DRIVER_DEFS_H
-#define CYBER_GEAR_DRIVER_DEFS_H
 
 #define CMD_POSITION 1
 #define CMD_RESPONSE 2
@@ -89,4 +87,3 @@
 #define CW 1
 #define CCW -1
 
-#endif  // !CYBER_GEAR_DRIVER_DEFS_H
