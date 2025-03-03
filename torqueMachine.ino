@@ -2,14 +2,18 @@
 #include"cybergear_driver_defs.h"
 #define CAN_2515
 #define DELAY_TIME 3
-#define RUN_TIME 1500
-#define STARTP -2
-#define ENDP 0.0
-#define CURRENT 6.75
+#define RUN_TIME 1200
+#define STARTP -1.2
+//-1.7 for 34 close;-1.2 for 20 open
+#define ENDP -3.0
+
+#define CURRENT 6.0
+//7.4 for 34 close;6.0 for 20 open
 #define RCURRENT 1.0
-#define LIMIT_SPEED 5.0
+#define LIMIT_SPEED 7.0
 #define BTN_INPUT 2
 #define SOL_OUTPUT 3
+#define SAFE_INPUT 4
 const int SPI_CS_PIN = 9;
 const int CAN_INT_PIN = 2;
 #ifdef CAN_2515
@@ -21,39 +25,48 @@ uint8_t master_can_id_ = 0x00;
 uint8_t target_can_id_ = 0x01;
 uint32_t id;
 uint8_t  type=0x01; // bit0: ext, bit1: rtr
+unsigned long switchTimer=0;
 byte len=8;
 byte data[8] = {0};
 byte cdata[8] = {0};
 int iValue=0;
+int sensorSwitch=LOW;
+int sensorSafe;
+bool inLock=false;
+bool outLock=false;
 float fValue=0.0;
-
 void setup()
 {
-  SERIAL_PORT_MONITOR.begin(115200);
-    while(!Serial){};
-
+  //SERIAL_PORT_MONITOR.begin(115200);
+  //  while(!Serial){};
     while (CAN_OK != CAN.begin(CAN_1000KBPS)) {             // init can bus : baudrate = 500k
         SERIAL_PORT_MONITOR.println("CAN init fail, retry...");
         delay(100);
     }
-    SERIAL_PORT_MONITOR.println("CAN init ok!");
+    //SERIAL_PORT_MONITOR.println("CAN init ok!");
+    iValue=read_int_data(CMD_RESPONSE);
   pinMode(SOL_OUTPUT, OUTPUT);
   pinMode(BTN_INPUT, INPUT_PULLUP);
+  pinMode(SAFE_INPUT, INPUT_PULLUP);
 }
-
 void loop()
 {
-  int sensorValue = digitalRead(2);
-  unsigned long startTime1 = millis();
-//check if at start pos
-
-  if ((sensorValue==LOW)||true){
-    runCyc();
+  sensorSwitch = digitalRead(BTN_INPUT);
+  sensorSafe = digitalRead(SAFE_INPUT);
+  if(sensorSafe==LOW){switchTimer=millis();}
+  if (sensorSafe==HIGH&&sensorSwitch==LOW){
+    if((millis()-switchTimer>250)&&inLock==false){
+      runCyc();
+      inLock=true;
+    }
   }
-  delay(DELAY_TIME);
+  else{
+    switchTimer=millis();
+    inLock=false;
+  }
 }
 void runCyc(){
-delay(100);
+delay(10);
 //clear read data
 iValue=read_int_data(CMD_RESPONSE);
 //init setting:set limit current,set run mode to MODE_POSITION,Enable motor
@@ -71,34 +84,52 @@ fValue=read_float_data(CMD_RAM_READ);
 unsigned long startTime = millis();
 //check if at start pos
 while ((abs(fValue-STARTP)>0.05)&&(millis() - startTime < 2000)){
-  Serial.println("Check start pos");
-  Serial.println(abs(fValue-STARTP));
+  //Serial.println("Check start pos");
+  //Serial.println(abs(fValue-STARTP));
   read_ram_data(ADDR_MECH_POS);
   fValue=read_float_data(CMD_RAM_READ);
   delay(10);
 }
-delay(5000);
+
 close_clamp();
 //go to end position
 set_position_ref(ENDP);
 //read_ram_data(ADDR_MECH_POS);
 //fValue=read_float_data(CMD_RAM_READ);
 delay(RUN_TIME);
+read_ram_data(ADDR_MECH_POS);
+fValue=read_float_data(CMD_RAM_READ);
 //release stress
 set_limit_current(1);
 delay(100);
 reset_motor();
-delay(250);
+delay(100);
 open_clamp();
 //test delay
-delay(5000);
+delay(100);
+
+if(abs(fValue-ENDP)<0.1){
+  set_limit_current(4.0);
+read_ram_data(ADDR_LIMIT_CURRENT);
+fValue=read_float_data(CMD_RAM_READ);
+set_run_mode(MODE_POSITION);
+enable_motor();
+//set limit_speed
+set_limit_speed(5.0);
+//go to start position
+set_position_ref(STARTP);
+read_ram_data(ADDR_MECH_POS);
+fValue=read_float_data(CMD_RAM_READ);
+delay(600);
+reset_motor();
+}
 }
 void open_clamp(){
-  digitalWrite(SOL_OUTPUT, HIGH);
-  delay(100);
+  digitalWrite(SOL_OUTPUT, LOW);
+  delay(150);
 }
 void close_clamp(){
-  digitalWrite(SOL_OUTPUT,LOW);
+  digitalWrite(SOL_OUTPUT,HIGH);
   delay(150);
 }
 void send_command(
