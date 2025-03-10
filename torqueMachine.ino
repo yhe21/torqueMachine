@@ -4,17 +4,20 @@
 #define DELAY_TIME 3
 
 //running setting:
-#define RUN_TIME 900
+#define RUN_TIME_1 900
+#define RUN_TIME_2 1200
 //runtime in ms
 #define STARTP -1.2
-#define ENDP -3.0
-#define CURRENT 4.0
-//6.4 for 25 open;4.0 for 20 open
+#define ENDP -3.6
+#define CURRENT_1 4.0
+#define CURRENT_2 6.3
+//6.3 for 30 open;4.0 for 20 open
 #define RCURRENT 1.0
 //resting current, prevent spring back.
 #define LIMIT_SPEED 7.0
 
 //pin setup:
+#define HIGH_INPUT 6
 #define BTN_INPUT 5
 #define SOL_OUTPUT 3
 #define SAFE_INPUT 4
@@ -34,9 +37,12 @@ unsigned long offTimer = 0;
 byte len = 8;
 byte data[8] = { 0 };
 byte cdata[8] = { 0 };
+int runtime=1000;
+float current=1.0;
 int iValue = 0;
 int sensorSwitch = LOW;
 int sensorSafe = HIGH;
+int highSwitch=HIGH;
 bool inLock = false;
 float fValue = 0.0;
 void setup() {
@@ -51,13 +57,18 @@ void setup() {
   pinMode(SOL_OUTPUT, OUTPUT);
   pinMode(BTN_INPUT, INPUT_PULLUP);
   pinMode(SAFE_INPUT, INPUT_PULLUP);
+  pinMode(HIGH_INPUT, INPUT_PULLUP);
+  
 }
 void loop() {
   sensorSwitch = digitalRead(BTN_INPUT);
   sensorSafe = digitalRead(SAFE_INPUT);
+  highSwitch = digitalRead(HIGH_INPUT);
   if (sensorSafe == HIGH) { switchTimer = millis(); }
   if (sensorSafe == LOW && sensorSwitch == LOW) {
     if ((millis() - switchTimer > 250) && inLock == false) {
+      if(highSwitch == HIGH){runtime=RUN_TIME_1; current=CURRENT_1; }
+      else {runtime=RUN_TIME_2; current=CURRENT_2;}
       runCyc();
       inLock = true;
       offTimer = millis();
@@ -73,7 +84,7 @@ void runCyc() {
   //clear read data
   iValue = read_int_data(CMD_RESPONSE);
   //init setting:set limit current,set run mode to MODE_POSITION,Enable motor
-  set_limit_current(CURRENT);
+  set_limit_current(current);
   read_ram_data(ADDR_LIMIT_CURRENT);
   fValue = read_float_data(CMD_RAM_READ);
   set_run_mode(MODE_POSITION);
@@ -99,7 +110,7 @@ void runCyc() {
   set_position_ref(ENDP);
   //read_ram_data(ADDR_MECH_POS);
   //fValue=read_float_data(CMD_RAM_READ);
-  delay(RUN_TIME);
+  delay(runtime);
   read_ram_data(ADDR_MECH_POS);
   fValue = read_float_data(CMD_RAM_READ);
   //release stress
@@ -108,8 +119,6 @@ void runCyc() {
   reset_motor();
   delay(100);
   open_clamp();
-  //test delay
-  delay(100);
 
   if (abs(fValue - ENDP) < 0.1) {
     set_limit_current(4.0);
