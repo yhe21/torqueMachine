@@ -1,5 +1,5 @@
 
-#define CMD_POSITION 1
+#define CMD_MOTION 1
 #define CMD_RESPONSE 2
 #define CMD_ENABLE 3
 #define CMD_RESET 4
